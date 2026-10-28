@@ -1,0 +1,242 @@
+# Plesk PHP Security Audit – Linux & Windows
+
+## Overview
+
+This repository contains read-only audit scripts to identify PHP security and patch-compliance issues on Plesk servers running Linux or Windows.
+
+The scripts help administrators identify:
+
+- PHP versions that are end-of-life (EOL) or unsupported.
+- PHP builds that require security updates.
+- PHP builds with unknown or unreadable build dates.
+- Websites using unsupported or non-compliant PHP handlers.
+- PHP processes that may require a restart after patching.
+- Domain counts grouped by PHP compliance status.
+- Audit results in CSV format for reporting across multiple servers.
+
+**Important:** These scripts perform an audit only. They do not install updates, change website PHP handlers, restart services, or remove PHP components.
+
+## Supported Platforms
+
+| Platform | Script | Execution privileges |
+|---|---|---|
+| Linux | `plesk_php_audit.sh` | Root |
+| Windows | `plesk_php_audit_windows.ps1` | Administrator / elevated PowerShell |
+
+## PHP Compliance Policy
+
+The scripts should be used with the applicable PHP security advisory and the organization's approved PHP policy.
+
+| PHP category | Compliance requirement |
+|---|---|
+| PHP 8.2 and later | Latest patched build required |
+| PHP 7.4, 8.0 and 8.1 on Linux | Patched build; temporary stop-gap only |
+| PHP below 7.4 | Unsupported; migration and removal required |
+| Unknown build date | Treat as not patched until verified |
+| Old PHP processes | Restart and verify after patching |
+
+**Windows:** PHP versions below 8.2 must be migrated to PHP 8.2 or later under the current SOP.
+
+A PHP version number alone does not establish patch compliance. Always verify the installed build against the relevant Plesk security advisory.
+
+---
+
+## 1. Linux Usage
+
+### Requirements
+
+- A Linux server with Plesk installed.
+- Root access.
+- Bash and the utilities required by the audit script.
+- The latest approved version of `plesk_php_audit.sh`.
+
+### Option 1: Standard audit
+
+Run the script locally as root:
+
+```bash
+chmod +x plesk_php_audit.sh
+./plesk_php_audit.sh
+```
+
+### Option 2: Audit with the security fix date
+
+Set the cutoff date specified in the applicable Plesk security advisory:
+
+```bash
+CUTOFF="YYYY-MM-DD" bash plesk_php_audit.sh
+```
+
+Replace `YYYY-MM-DD` with the actual fix date from the advisory. Do not use a placeholder date for a production audit.
+
+To save the results:
+
+```bash
+CUTOFF="YYYY-MM-DD" bash plesk_php_audit.sh \
+  | tee /root/php_audit_$(date +%F).txt
+```
+
+### Option 3: CSV header
+
+Generate the CSV header for a reporting spreadsheet:
+
+```bash
+bash plesk_php_audit.sh --csv-header > php_audit.csv
+```
+
+### Option 4: CSV output
+
+Generate one CSV record for the current server:
+
+```bash
+CUTOFF="YYYY-MM-DD" bash plesk_php_audit.sh --csv
+```
+
+Append the record to an existing CSV file:
+
+```bash
+CUTOFF="YYYY-MM-DD" bash plesk_php_audit.sh --csv >> php_audit.csv
+```
+
+Initialize the file with the header before appending records.
+
+### Option 5: List affected domains
+
+Display domain names for investigation and migration planning:
+
+```bash
+CUTOFF="YYYY-MM-DD" bash plesk_php_audit.sh --list-domains
+```
+
+Use this option when preparing the website migration tracker.
+
+### Option 6: Review the script before execution
+
+```bash
+less plesk_php_audit.sh
+```
+
+Review the script and confirm its source before running it with root privileges.
+
+---
+
+## 2. Windows Usage
+
+### Requirements
+
+- Windows Server with Plesk installed.
+- An elevated PowerShell session.
+- The approved version of `plesk_php_audit_windows.ps1`.
+
+Open PowerShell as Administrator and navigate to the directory containing the script.
+
+### Option 1: Standard audit
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\plesk_php_audit_windows.ps1
+```
+
+### Option 2: CSV header
+
+Generate the CSV header:
+
+```powershell
+.\plesk_php_audit_windows.ps1 -CsvHeader
+```
+
+### Option 3: CSV output
+
+Generate the audit result in CSV format:
+
+```powershell
+.\plesk_php_audit_windows.ps1 -Csv
+```
+
+### Option 4: List affected domains
+
+Display the domains requiring investigation:
+
+```powershell
+.\plesk_php_audit_windows.ps1 -ListDomains
+```
+
+The Windows and Linux scripts use matching CSV columns so that results can be consolidated into a common reporting spreadsheet.
+
+**Note:** These commands assume the scripts implement the listed parameters. Confirm the available parameters in the published script version before using them.
+
+---
+
+## 3. Available Audit Options
+
+| Option | Linux | Windows | Purpose |
+|---|---|---|---|
+| Standard audit | No additional argument | No additional parameter | Audit PHP builds and compliance |
+| Fix-date cutoff | `CUTOFF="YYYY-MM-DD"` | As implemented in the script | Compare builds with the advisory fix date |
+| CSV header | `--csv-header` | `-CsvHeader` | Generate reporting column names |
+| CSV output | `--csv` | `-Csv` | Output a server-level CSV record |
+| List domains | `--list-domains` | `-ListDomains` | Identify domains requiring investigation |
+
+The fix-date cutoff syntax shown above is for Linux. Use only the parameters actually supported by the published Windows script.
+
+---
+
+## 4. Understanding Audit Results
+
+| Result | Meaning | Recommended action |
+|---|---|---|
+| `PATCHED` | Supported PHP build meets the configured patch criteria | No immediate patch action identified by this check |
+| `NOT PATCHED (EOL)` | PHP version is unsupported | Migrate websites and plan component removal |
+| `NOT PATCHED (old build)` | Installed build predates the required fix | Update the relevant PHP component |
+| `NOT PATCHED (unknown build)` | Build date or package information cannot be verified | Investigate and verify the installed package |
+| `RESTART NEEDED` | A running process may still use an old PHP binary | Restart the affected service during an approved maintenance window |
+
+Do not treat unknown build information as a successful security check.
+
+---
+
+## 5. Recommended Remediation Workflow
+
+1. Run the audit on the server.
+2. Save the output as before-change evidence.
+3. Review the applicable Plesk security advisory and confirm the required fix date.
+4. Identify affected domains and PHP handlers.
+5. Raise an approved change request and arrange a maintenance window.
+6. Back up the server or take a verified snapshot.
+7. Update PHP components and upgrade Plesk when required.
+8. Obtain client approval before changing website PHP versions.
+9. Test affected websites after migration.
+10. Remove EOL PHP components only after confirming that no websites or service plans depend on them.
+11. Restart relevant services and verify that stale PHP processes are no longer present.
+12. Run the audit again and save the after-change evidence.
+
+## 6. Reporting Across Multiple Servers
+
+For fleet-level reporting:
+
+- Generate the CSV header once.
+- Run the CSV audit on each Linux server.
+- Run the Windows CSV audit on each Windows server.
+- Consolidate the results into one spreadsheet.
+- Track supported, stop-gap, unsupported and unpatched PHP usage.
+- Assign remediation owners and target dates for non-compliant servers.
+
+Do not include domain names in a general fleet report unless they are needed for remediation. Use the domain-listing option for authorized technical investigation.
+
+## 7. Important Security Notes
+
+- Review scripts from a trusted repository before execution.
+- Run with elevated privileges only when required.
+- Do not assume that a successful script execution means every PHP build is patched.
+- Verify results against the current official Plesk security advisory.
+- Do not remove PHP versions until website and service-plan dependencies have been checked.
+- Keep audit output and remediation evidence with the change record.
+- Treat these scripts as audit tools, not as substitutes for patching, migration or application testing.
+
+## 8. References
+
+- [Plesk Support – PHP2Shell security advisory (CVE-2026-109618 and CVE-2026-109619)](https://support.plesk.com/hc/en-us/articles/44397729587351-Vulnerability-CVE-2026-109618-and-CVE-2026-109619-PHP2Shell-Remote-code-execution-in-PHP-shipped-with-Plesk)
+- [Plesk Documentation](https://docs.plesk.com/)
+
+## Disclaimer
+
+This repository provides administrative audit utilities. Always validate the output, follow the approved change-management process, and test remediation changes before considering a server compliant.
